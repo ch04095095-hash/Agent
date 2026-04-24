@@ -1,0 +1,81 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python cache / build
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Logs / runtime
+*.log
+logs/
+*.pid
+
+# Project logs
+oellm_agent/logs/
+
+# Local databases / temporary files
+*.sqlite3
+*.db
+*.tmp
+*.swp
+
+# Model / checkpoint artifacts (usually large)
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+*.whl
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# Node (if used in subfolders)
+node_modules/
+
+# Large local docs to ignore
+D-Robotics_LLM_S100_1.0.0_Doc/
+modelscope/
+
+# SDK: ignore all by default, keep only required parts
+D-Robotics_LLM_S100_1.0.0_SDK/**
+!D-Robotics_LLM_S100_1.0.0_SDK/
+!D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/
+!D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_build/
+!D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_build/**
+!D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_runtime/
+!D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_runtime/example/
+!D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_runtime/example/oellm_multichat/
+!D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_runtime/example/oellm_multichat/**
+!D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_runtime/config/
+!D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_runtime/config/Qwen2.5_1.5B_Instruct_config/
+!D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_runtime/config/Qwen2.5_1.5B_Instruct_config/**
+
+# Nested repo metadata to ignore
+oellm_agent/.git/
+
+# oversized wheel
+D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_build/hbdk4_compiler-*.whl

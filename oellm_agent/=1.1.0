@@ -1,0 +1,4 @@
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Requirement already satisfied: python-docx in ./.venv/lib/python3.10/site-packages (1.2.0)
+Requirement already satisfied: lxml>=3.1.0 in ./.venv/lib/python3.10/site-packages (from python-docx) (6.0.2)
+Requirement already satisfied: typing_extensions>=4.9.0 in ./.venv/lib/python3.10/site-packages (from python-docx) (4.15.0)
