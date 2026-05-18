@@ -1,0 +1,75 @@
+{
+  "travel_pressure_low_warning": 26.0,
+  "travel_pressure_high_warning": 250.0,
+  "travel_pressure_low_stop": 25.0,
+  "travel_pressure_high_stop": 380.0,
+  "travel_pressure_low_stop_duration_sec": 10.0,
+
+  "clamp_pressure_low_warning": 110.0,
+  "clamp_pressure_high_warning": 135.0,
+  "clamp_pressure_low_stop": 70.0,
+  "clamp_pressure_high_stop": 140.0,
+
+  "brake_pressure_low_warning": 150.0,
+  "brake_pressure_low_stop": 60.0,
+  "brake_pressure_high_warning": 180.0,
+  "brake_pressure_high_stop": 185.0,
+
+  "make_up_oil_pressure_low_warning": 23.0,
+  "make_up_oil_pressure_low_stop": 16.0,
+  "make_up_oil_pressure_high_normal": 28.0,
+
+  "intake_pressure_low_warning": 104.0,
+  "intake_pressure_low_stop": 90.0,
+
+  "oil_pressure_low_warning_kpa": 380.0,
+  "oil_pressure_low_stop_kpa": 70.0,
+
+  "hydraulic_oil_temp_high_normal": 65.0,
+  "hydraulic_oil_temp_high_warning": 65.0,
+  "hydraulic_oil_temp_high_stop": 69.0,
+
+  "coolant_temp_high_normal": 93.0,
+  "coolant_temp_high_warning": 93.0,
+  "coolant_temp_high_stop": 95.0,
+
+  "surface_temp_high_warning": 147.0,
+  "surface_temp_high_stop": 150.0,
+
+  "exhaust_temp_high_normal": 65.0,
+  "exhaust_temp_high_warning": 65.0,
+  "exhaust_temp_high_stop": 69.0,
+
+  "water_tank_level_low_warning": 20.0,
+  "water_tank_level_low_stop": 10.0,
+
+  "engine_rpm_high_warning": 2200.0,
+  "engine_rpm_high_stop": 2300.0,
+
+  "speed_high_warning_mps": 2.2,
+  "speed_low_warning_mps": 0.15,
+  "speed_low_warning_duration_sec": 60,
+  "speed_high_stop_mps": 2.5,
+
+  "methane_high_stop": 0.5,
+
+  "co_high_stop_ppm": 24.0,
+  "co_high_warning_ppm": 24.0,
+
+  "diesel_level_low_warning_cm": 30.0,
+  "diesel_level_low_stop_cm": 28.0,
+
+  "hydraulic_oil_level_low_warning": 40.0,
+  "hydraulic_oil_level_low_stop": 39.0,
+
+  "system_pressure_low_warning": 150.0,
+  "system_pressure_low_stop": 80.0,
+
+  "decision_drive_gear_grace_sec": 15.0,
+  "decision_drive_effective_hold_sec": 3.0,
+  "decision_drive_starting_rpm_max": 1300.0,
+  "decision_drive_effective_rpm_min": 1400.0,
+  "decision_brake_pressure_low_normal_floor": 145.0,
+  "decision_system_pressure_low_normal_floor": 145.0,
+  "decision_speed_low_effective_hold_sec": 60.0
+}

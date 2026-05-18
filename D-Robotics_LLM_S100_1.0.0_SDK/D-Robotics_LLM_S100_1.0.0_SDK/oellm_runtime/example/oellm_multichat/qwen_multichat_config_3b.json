@@ -1,0 +1,6 @@
+{
+    "hbm_path": "../../model/qwen2.5_3b_2048.hbm",
+    "tokenizer_dir": "../../config/Qwen2.5_1.5B_Instruct_config/",
+    "template_path": "../../config/Qwen2.5_1.5B_Instruct_config/Qwen2.5_1.5B_Instruct.jinja",
+    "model_type": 7
+  }

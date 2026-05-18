@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <memory>
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -103,17 +104,11 @@ static char *read_chat_template_file(const char *filepath) {
   return content;
 }
 
-static const char *kDecisionSystemPrompt = R"PROMPT(你是矿车控制决策模块。只输出一个合法 JSON。
+static const char *kDecisionSystemPrompt = R"PROMPT(只输出一个合法 JSON。)PROMPT";
 
-输入为 current、window、event_state、history；window.signals 里的每个信号只包含 value 和 meaning，meaning 是主要语义依据。
-决策原则：硬底线触发 -> BRAKE；ready_to_move -> MOVE；异常/过高/过低/接近报警 -> HOLD。
-输出字段仅允许 action, risk_level, reason, suspected_fault, recommended_adjustment, monitor_next, confidence。
-reason 要像工程师判断：先说总体状态，再说关键风险，再说动作建议。
-只输出 JSON，不要多余文本。
-
-最小合法模板:
-{"action":"HOLD","risk_level":"warning","reason":"","suspected_fault":[],"recommended_adjustment":[],"monitor_next":[],"confidence":0.5}
-)PROMPT";
+static std::string sanitize_utf8_for_json(const std::string &input);
+static void sanitize_json_strings(json *value);
+static std::string safe_json_dump(json value);
 
 static std::string extract_json_candidate(const std::string &text) {
   const auto first = text.find('{');
@@ -124,107 +119,30 @@ static std::string extract_json_candidate(const std::string &text) {
   return text.substr(first, last - first + 1);
 }
 
-static bool is_array_of_strings(const json &arr) {
-  if (!arr.is_array()) return false;
-  for (const auto &item : arr) {
-    if (!item.is_string()) return false;
+static std::string repair_json_candidate(std::string candidate) {
+  const std::string broken_risk = "\"risk_level:\"";
+  size_t broken_pos = 0;
+  while ((broken_pos = candidate.find(broken_risk, broken_pos)) != std::string::npos) {
+    candidate.replace(broken_pos, broken_risk.size(), "\"risk_level\":\"");
+    broken_pos += std::string("\"risk_level\":\"").size();
   }
-  return true;
-}
 
-static bool validate_event_state(const json &event_state, std::string &reason) {
-  if (!event_state.is_object()) {
-    reason = "event_state must be object";
-    return false;
-  }
-  for (const auto &field : {"primary_event", "severity", "reason"}) {
-    if (!event_state.contains(field) || !event_state[field].is_string()) {
-      reason = std::string("event_state missing/invalid field: ") + field;
-      return false;
+  std::vector<std::pair<std::string, std::string>> replacements = {
+      {"\"riskLevel\"", "\"risk_level\""},
+      {"\"overallLevel\"", "\"overall_level\""},
+      {"\"suspect_fault\"", "\"suspected_fault\""},
+      {"\"suspectFault\"", "\"suspected_fault\""},
+      {"\"recommendedAdjustment\"", "\"recommended_adjustment\""},
+      {"\"monitorNext\"", "\"monitor_next\""},
+      {"\"warningTags\"", "\"warning_tags\""}};
+  for (const auto &item : replacements) {
+    size_t pos = 0;
+    while ((pos = candidate.find(item.first, pos)) != std::string::npos) {
+      candidate.replace(pos, item.first.size(), item.second);
+      pos += item.second.size();
     }
   }
-  if (event_state.contains("secondary_events") &&
-      !is_array_of_strings(event_state["secondary_events"])) {
-    reason = "event_state.secondary_events must be string array";
-    return false;
-  }
-  if (event_state.contains("recommended_adjustments") &&
-      !is_array_of_strings(event_state["recommended_adjustments"])) {
-    reason = "event_state.recommended_adjustments must be string array";
-    return false;
-  }
-  if (event_state.contains("confidence_hint") &&
-      !event_state["confidence_hint"].is_number()) {
-    reason = "event_state.confidence_hint must be number";
-    return false;
-  }
-  if (event_state.contains("semantic_summary") &&
-      !is_array_of_strings(event_state["semantic_summary"])) {
-    reason = "event_state.semantic_summary must be string array";
-    return false;
-  }
-  return true;
-}
-
-static bool is_valid_decision_json(const json &obj, std::string &reason) {
-  static const std::vector<std::string> required_fields = {
-      "action", "risk_level", "reason", "suspected_fault",
-      "recommended_adjustment", "monitor_next", "confidence"};
-  for (const auto &field : required_fields) {
-    if (!obj.contains(field)) {
-      reason = "missing field: " + field;
-      return false;
-    }
-  }
-
-  if (!obj["action"].is_string() || !obj["risk_level"].is_string() ||
-      !obj["reason"].is_string()) {
-    reason = "string field invalid";
-    return false;
-  }
-  const auto action = obj["action"].get<std::string>();
-  const auto risk_level = obj["risk_level"].get<std::string>();
-  if (action != "MOVE" && action != "HOLD" && action != "BRAKE" &&
-      action != "FAULT_REPORT") {
-    reason = "invalid action";
-    return false;
-  }
-  if (risk_level != "normal" && risk_level != "warning" &&
-      risk_level != "danger") {
-    reason = "invalid risk_level";
-    return false;
-  }
-  for (const auto &field : {"suspected_fault", "recommended_adjustment",
-                             "monitor_next"}) {
-    if (!obj[field].is_array() || !is_array_of_strings(obj[field])) {
-      reason = std::string(field) + " must be string array";
-      return false;
-    }
-  }
-  if (!obj["confidence"].is_number()) {
-    reason = "confidence must be number";
-    return false;
-  }
-  const double confidence = obj["confidence"].get<double>();
-  if (confidence < 0.0 || confidence > 1.0) {
-    reason = "confidence out of range";
-    return false;
-  }
-  if (!obj.empty() && obj.size() != 7) {
-    reason = "unexpected extra fields";
-    return false;
-  }
-  return true;
-}
-
-static json default_decision_json() {
-  return json{{"action", "HOLD"},
-              {"risk_level", "warning"},
-              {"reason", "模型输出不合法，已兜底"},
-              {"suspected_fault", json::array()},
-              {"recommended_adjustment", json::array()},
-              {"monitor_next", json::array()},
-              {"confidence", 0.5}};
+  return candidate;
 }
 
 static bool parse_and_validate_decision(const std::string &raw, json *parsed,
@@ -234,17 +152,14 @@ static bool parse_and_validate_decision(const std::string &raw, json *parsed,
     if (reason) *reason = "no json candidate";
     return false;
   }
+  const std::string sanitized_candidate = sanitize_utf8_for_json(candidate);
   try {
-    json obj = json::parse(candidate);
+    json obj = json::parse(repair_json_candidate(sanitized_candidate));
     if (!obj.is_object()) {
       if (reason) *reason = "json is not object";
       return false;
     }
-    std::string validate_reason;
-    if (!is_valid_decision_json(obj, validate_reason)) {
-      if (reason) *reason = validate_reason;
-      return false;
-    }
+    sanitize_json_strings(&obj);
     if (parsed) *parsed = obj;
     return true;
   } catch (const std::exception &e) {
@@ -264,9 +179,30 @@ struct DecisionRunContext {
   std::string error_text;
 };
 
+static std::string xlm_state_name(xlm_state_e state) {
+  switch (state) {
+    case XLM_STATE_ERROR:
+      return "ERROR";
+    case XLM_STATE_END:
+      return "END";
+    default:
+      return "STATE_" + std::to_string(static_cast<int>(state));
+  }
+}
+
 static void callback(xlm_result_s *result, xlm_state_e state, void *userdata) {
+  if (!userdata) {
+    if (state == XLM_STATE_ERROR) {
+      std::cout << "[LLM] callback error" << std::endl;
+    } else if (state == XLM_STATE_END) {
+      std::cout << std::endl << "[LLM] callback end" << std::endl;
+    } else if (result && result->text) {
+      std::cout << result->text << std::flush;
+    }
+    return;
+  }
+
   auto *ctx = reinterpret_cast<DecisionRunContext *>(userdata);
-  if (!ctx) return;
   std::lock_guard<std::mutex> lk(ctx->mu);
   ctx->started = true;
   if (state == XLM_STATE_ERROR) {
@@ -286,30 +222,7 @@ static void callback(xlm_result_s *result, xlm_state_e state, void *userdata) {
 }
 
 static std::string build_decision_prompt(const json &user_input) {
-  const json current = user_input.value("current", json::object());
-  const json window = user_input.value("window", json::object());
-  const json event_state = user_input.value("event_state", json::object());
-  const json history = user_input.value("history", json::object());
-
-  json compact;
-  compact["current"] = current;
-  compact["window"] = window;
-  compact["event_state"] = event_state;
-  compact["history"] = history;
-
-  std::string prompt;
-  prompt += "你是矿车控制决策模块。只输出一行合法 JSON，对象字段固定为 action, risk_level, reason, suspected_fault, recommended_adjustment, monitor_next, confidence。\n";
-  prompt += "输入已经按 current/window/event_state/history 结构化。\n";
-  prompt += "window.signals 里每个信号只含 value 和 meaning，meaning 是最重要的语义依据。\n";
-  prompt += "优先依据 event_state，其次参考 window 中各信号的 meaning，最后参考 current/history。\n";
-  prompt += "规则：ready_to_move -> MOVE；*_over_stop / emergency_stop / heartbeat_lost -> BRAKE；异常/过高/过低/接近报警 -> HOLD。\n";
-  prompt += "不要输出解释、markdown、代码块、前后缀、闲聊。\n";
-  prompt += "reason 要像工程师判断，先说总体状态，再说关键风险，再说动作建议。\n";
-  prompt += "confidence 必须在 0 到 1 之间。\n";
-  prompt += "最小模板:{\"action\":\"HOLD\",\"risk_level\":\"warning\",\"reason\":\"\",\"suspected_fault\":[],\"recommended_adjustment\":[],\"monitor_next\":[],\"confidence\":0.5}\n";
-  prompt += "输入:" + compact.dump() + "\n";
-  prompt += "只输出 JSON:";
-  return prompt;
+  return user_input.dump();
 }
 
 static std::string http_response(const std::string &status,
@@ -322,6 +235,85 @@ static std::string http_response(const std::string &status,
   resp += "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
   resp += body;
   return resp;
+}
+
+static std::string sanitize_stdio_output(std::string text) {
+  text.erase(std::remove(text.begin(), text.end(), '\r'), text.end());
+  return text;
+}
+
+ static std::string sanitize_utf8_for_json(const std::string &input) {
+  std::string out;
+  out.reserve(input.size());
+  for (size_t i = 0; i < input.size();) {
+    const unsigned char c = static_cast<unsigned char>(input[i]);
+    if (c < 0x80) {
+      out.push_back(static_cast<char>(c));
+      ++i;
+      continue;
+    }
+
+    size_t len = 0;
+    if ((c & 0xE0) == 0xC0) {
+      len = 2;
+    } else if ((c & 0xF0) == 0xE0) {
+      len = 3;
+    } else if ((c & 0xF8) == 0xF0) {
+      len = 4;
+    } else {
+      out.push_back('?');
+      ++i;
+      continue;
+    }
+
+    if (i + len > input.size()) {
+      out.push_back('?');
+      break;
+    }
+
+    bool valid = true;
+    for (size_t j = 1; j < len; ++j) {
+      const unsigned char cc = static_cast<unsigned char>(input[i + j]);
+      if ((cc & 0xC0) != 0x80) {
+        valid = false;
+        break;
+      }
+    }
+
+    if (!valid) {
+      out.push_back('?');
+      ++i;
+      continue;
+    }
+
+    out.append(input, i, len);
+    i += len;
+  }
+  return out;
+}
+
+static void sanitize_json_strings(json *value) {
+  if (value == nullptr) return;
+  if (value->is_string()) {
+    *value = sanitize_utf8_for_json(value->get<std::string>());
+    return;
+  }
+  if (value->is_object()) {
+    for (auto it = value->begin(); it != value->end(); ++it) {
+      sanitize_json_strings(&it.value());
+    }
+    return;
+  }
+  if (value->is_array()) {
+    for (auto &item : *value) {
+      sanitize_json_strings(&item);
+    }
+  }
+}
+
+static std::string safe_json_dump(json value) {
+  sanitize_json_strings(&value);
+  return value.dump();
 }
 
 class SimpleHttpServer {
@@ -378,7 +370,21 @@ class SimpleHttpServer {
     ssize_t n = 0;
     while ((n = recv(cfd, buf, sizeof(buf), 0)) > 0) {
       req.append(buf, buf + n);
-      if (req.find("\r\n\r\n") != std::string::npos) break;
+      const auto header_end = req.find("\r\n\r\n");
+      if (header_end != std::string::npos) {
+        size_t content_length = 0;
+        std::string headers = req.substr(0, header_end);
+        std::string lower_headers = headers;
+        std::transform(lower_headers.begin(), lower_headers.end(), lower_headers.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        const auto cl_pos = lower_headers.find("content-length:");
+        if (cl_pos != std::string::npos) {
+          const auto value_start = cl_pos + std::string("content-length:").size();
+          const auto value_end = lower_headers.find("\r\n", value_start);
+          const std::string value = lower_headers.substr(value_start, value_end == std::string::npos ? std::string::npos : value_end - value_start);
+          content_length = static_cast<size_t>(std::strtoull(value.c_str(), nullptr, 10));
+        }
+        if (req.size() >= header_end + 4 + content_length) break;
+      }
     }
     if (req.empty()) {
       close(cfd);
@@ -640,6 +646,17 @@ int32_t main(int32_t argc, char **argv) {
   std::cout << "port: " << port << std::endl;
 
   xlm_common_params_t param = xlm_create_default_param();
+  param.context_size = 512;
+  param.sampling.min_keep = 1;
+  param.sampling.min_p = 0.0f;
+  param.sampling.temp = 0.0f;
+  param.sampling.top_k = 1;
+  param.sampling.top_p = 1.0f;
+  param.sampling.typ_p = 1.0f;
+  param.sampling.penalty_last_n = 64;
+  param.sampling.penalty_freq = 0.0f;
+  param.sampling.penalty_present = 0.0f;
+  param.sampling.penalty_repeat = 1.2f;
   param.model_path = hbm_path.c_str();
   param.token_config_path = tokenizer_dir.c_str();
   param.model_type = static_cast<xlm_model_type>(model_type);
@@ -666,19 +683,29 @@ int32_t main(int32_t argc, char **argv) {
     return 1;
   }
 
-  xlm_input_s input;
+  xlm_input_t input;
   memset(&input, 0, sizeof(input));
   input.request_num = 1;
-  std::vector<xlm_lm_request_t> requests(input.request_num);
-  input.requests = requests.data();
+  auto requests = std::unique_ptr<xlm_lm_request_t, decltype(&free)>(
+      reinterpret_cast<xlm_lm_request_t *>(malloc(sizeof(xlm_lm_request_t) * input.request_num)), free);
+  if (!requests) {
+    std::cout << "malloc requests failed" << std::endl;
+    free(chat_template);
+    xlm_destroy(&llm_handle);
+    return 1;
+  }
+  input.requests = requests.get();
 
-  auto &request = input.requests[0];
-  memset(&request, 0, sizeof(request));
-  request.type = XLM_INPUT_PROMPT;
-  request.new_chat = true;
-  request.system_prompt = kDecisionSystemPrompt;
-  request.chat_template = chat_template;
-  request.infer_backend = (bpu_core == -1) ? XLM_INFER_BACKEND_BPU_ANY : kModelTypeMap.at(bpu_core);
+  xlm_lm_request_t *request = &input.requests[0];
+  memset(request, 0, sizeof(xlm_lm_request_t));
+  request->type = XLM_INPUT_PROMPT;
+  request->new_chat = true;
+  request->system_prompt = nullptr;
+  request->chat_template = chat_template;
+  request->infer_backend = (bpu_core == -1) ? XLM_INFER_BACKEND_BPU_ANY : kModelTypeMap.at(bpu_core);
+
+  const bool enable_llm_decode = std::getenv("OELLM_AGENT_ENABLE_LLM") != nullptr;
+  std::cout << "agent_llm_decode: " << (enable_llm_decode ? "enabled" : "disabled") << std::endl;
 
   auto infer_once = [&](const std::string &payload_text, int timeout_ms) -> json {
     json user_input;
@@ -690,40 +717,59 @@ int32_t main(int32_t argc, char **argv) {
     if (!user_input.is_object()) {
       return json{{"error", "input must be JSON object"}};
     }
-    if (user_input.contains("event_state")) {
-      std::string reason;
-      if (!validate_event_state(user_input["event_state"], reason)) {
-        return json{{"error", std::string("invalid event_state: ") + reason}};
-      }
+    if (!enable_llm_decode) {
+      return json{{"error", "llm decode disabled"},
+                  {"hint", "set OELLM_AGENT_ENABLE_LLM=1 to enable model generation"}};
     }
 
-    std::string prompt = build_decision_prompt(user_input);
-    request.prompt = prompt.c_str();
+    char input_str[10240];
+    memset(input_str, 0, sizeof(input_str));
+    const std::string prompt = build_decision_prompt(user_input);
+    std::snprintf(input_str, sizeof(input_str), "%s", prompt.c_str());
+    request->new_chat = true;
+    request->system_prompt = nullptr;
+    request->chat_template = chat_template;
+    request->prompt = input_str;
 
     DecisionRunContext ctx;
-    std::thread infer_thread([&]() { xlm_infer(llm_handle, &input, &ctx); });
-
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
-    std::unique_lock<std::mutex> lk(ctx.mu);
-    const bool finished = ctx.cv.wait_until(lk, deadline, [&]() { return ctx.finished; });
-    if (!finished) {
-      ctx.timed_out = true;
-      lk.unlock();
-      if (infer_thread.joinable()) infer_thread.detach();
-      json fallback = default_decision_json();
-      fallback["reason"] = "fallback: inference timeout";
-      fallback["timeout_ms"] = timeout_ms;
-      return fallback;
+    std::cout << "[LLM] infer begin prompt_len=" << std::strlen(input_str) << std::endl;
+    const int infer_ret = xlm_infer(llm_handle, &input, &ctx);
+    std::cout << "[LLM] xlm_infer ret=" << infer_ret << std::endl;
+    request->new_chat = true;
+    if (infer_ret != 0) {
+      return json{{"error", "xlm_infer failed"}, {"ret", infer_ret}};
     }
-    lk.unlock();
-    if (infer_thread.joinable()) infer_thread.join();
+
+    std::string raw_output;
+    bool has_error = false;
+    std::string error_text;
+    {
+      std::lock_guard<std::mutex> lk(ctx.mu);
+      raw_output = ctx.raw_output;
+      has_error = ctx.error;
+      error_text = ctx.error_text;
+    }
+
+    raw_output = sanitize_utf8_for_json(raw_output);
+    if (!error_text.empty()) {
+      error_text = sanitize_utf8_for_json(error_text);
+    }
+
+    if (has_error) {
+      return json{{"raw_output", raw_output},
+                  {"llm_prompt_mode", "template_minimal_user_prompt_sync"},
+                  {"error", error_text.empty() ? "xlm runtime error" : error_text}};
+    }
 
     json parsed;
     std::string parse_reason;
-    if (!parse_and_validate_decision(ctx.raw_output, &parsed, &parse_reason)) {
-      parsed = default_decision_json();
-      parsed["reason"] = std::string("fallback: ") + parse_reason;
+    if (!parse_and_validate_decision(raw_output, &parsed, &parse_reason)) {
+      return json{{"raw_output", raw_output},
+                  {"llm_prompt_mode", "template_minimal_user_prompt_sync"},
+                  {"error", parse_reason}};
     }
+    parsed["llm_prompt_mode"] = "template_minimal_user_prompt_sync";
+    parsed["raw_output"] = raw_output;
     return parsed;
   };
 
@@ -732,21 +778,16 @@ int32_t main(int32_t argc, char **argv) {
 
   auto health = [&]() -> std::string {
     const WorkerState s = worker.snapshot();
-    return json{{"status", "ok"},
-                {"service", "oellm_multichat"},
-                {"busy", s.busy},
-                {"last_error", s.last_error},
-                {"last_submit_ms", s.last_submit_ms},
-                {"last_success_ms", s.last_success_ms},
-                {"last_elapsed_ms", s.last_elapsed_ms},
-                {"consecutive_timeouts", s.consecutive_timeouts},
-                {"last_request_id", s.last_request_id}}
-        .dump();
+    return safe_json_dump(json{{"status", "ok"},
+                               {"service", "oellm_multichat"},
+                               {"busy", s.busy},
+                               {"last_error", s.last_error},
+                               {"last_submit_ms", s.last_submit_ms},
+                               {"last_success_ms", s.last_success_ms},
+                               {"last_elapsed_ms", s.last_elapsed_ms},
+                               {"consecutive_timeouts", s.consecutive_timeouts},
+                               {"last_request_id", s.last_request_id}});
   };
-
-  if (mode != "http") {
-    std::cout << "mode '" << mode << "' is deprecated; forcing http mode" << std::endl;
-  }
 
   auto handler = [&](const std::string &method, const std::string &body) -> std::string {
     const auto start = std::chrono::steady_clock::now();
@@ -755,22 +796,54 @@ int32_t main(int32_t argc, char **argv) {
     }
     json decision;
     if (!worker.submit(method + ":infer", body, &decision)) {
-      decision = default_decision_json();
-      decision["reason"] = "worker busy";
+      decision = json{{"error", "worker busy"}};
     }
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - start).count();
     decision["elapsed_ms"] = elapsed;
     decision["request_method"] = method;
-    return decision.dump();
+    return safe_json_dump(std::move(decision));
   };
 
   auto health_handler = [&](const std::string &, const std::string &) -> std::string {
     return health();
   };
 
-  SimpleHttpServer server(port, handler, health_handler);
-  server.run();
+  if (mode == "direct") {
+    char direct_prompt[10240];
+    memset(direct_prompt, 0, sizeof(direct_prompt));
+    std::snprintf(direct_prompt, sizeof(direct_prompt), "%s", "你好，请只回答一个词：OK");
+    request->new_chat = true;
+    request->system_prompt = nullptr;
+    request->chat_template = chat_template;
+    request->prompt = direct_prompt;
+    std::cout << "[Direct] infer begin prompt_len=" << std::strlen(direct_prompt) << std::endl;
+    const int infer_ret = xlm_infer_async(llm_handle, &input, nullptr);
+    std::cout << "[Direct] xlm_infer_async ret=" << infer_ret << std::endl;
+    if (infer_ret == 0) {
+      std::this_thread::sleep_for(std::chrono::seconds(20));
+    }
+  } else if (mode == "stdin") {
+    std::cout << "[User] <<<" << std::endl;
+    std::string line;
+    while (g_running.load() && std::getline(std::cin, line)) {
+      line = sanitize_stdio_output(line);
+      if (line == "exit") {
+        break;
+      }
+      if (line.empty() || line == "reset") {
+        std::cout << "[User] <<<" << std::endl;
+        continue;
+      }
+      const std::string response = handler("STDIN", line);
+      std::cout << "[Assistant] >>>" << std::endl;
+      std::cout << response << std::endl;
+      std::cout << "[User] <<<" << std::endl;
+    }
+  } else {
+    SimpleHttpServer server(port, handler, health_handler);
+    server.run();
+  }
 
   worker.stop();
   free(chat_template);

@@ -1,6 +1,0 @@
-{
-    "hbm_path": "../../model/DeepSeek_R1_Distill_Qwen_1.5B_4096.hbm",
-    "tokenizer_dir": "../../config/DeepSeek_R1_Distill_Qwen_1.5B_config/",
-    "template_path": "../../config/DeepSeek_R1_Distill_Qwen_1.5B_config/DeepSeek_R1_Distill_Qwen_1.5B.jinja",
-    "model_type": 1
-}

@@ -79,3 +79,4 @@ oellm_agent/.git/
 
 # oversized wheel
 D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_build/hbdk4_compiler-*.whl
+D-Robotics_LLM_S100_1.0.0_SDK/D-Robotics_LLM_S100_1.0.0_SDK/oellm_runtime/example/oellm_multichat/build/

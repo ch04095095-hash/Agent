@@ -1,59 +1,188 @@
 {
+  "_comment": "阈值总说明：本文件先作为人工可读的总表使用。后续建议按车型同步整理到 config/thresholds/{190,105,50}.json。JSON 不支持真正注释，所以这里使用 _comment/_sections/_notes 字段说明。",
+  "_sections": {
+    "l1_stop_thresholds": "L1 硬安全阈值：只给 hard_safety_check 使用，触发后直接 BRAKE/停机保护；RiskEngine 不应该用这些字段做 warning 判断。字段名通常包含 stop/min/max。",
+    "risk_engine_thresholds": "RiskEngine 风险辅助阈值：用于 warning/high/low/normal 多风险输出，不直接等价于 L1 停机。字段名通常包含 warn/high/low/alarm。",
+    "semantic_thresholds": "语义信息 meaning 的阈值来源：CAN 解码器和窗口聚合会使用这些边界生成 正常/偏高/偏低/异常 等语义。后续建议单独抽 semantic config。"
+  },
+  "_notes": {
+    "comparison_convention": "温度/速度/转速/气体一般是值越高越危险；压力/液位通常有 low/min 下限；部分压力也有 high/max 上限。",
+    "stop_vs_warning": "stop/min/max 是 L1 硬阈值；warn/high/low 是 RiskEngine 预警或报警分层阈值。",
+    "current_issue": "当前部分字段存在重叠，例如 coolant_stop 与 coolant_temp_high 都是 98；brake_pressure_min 与 brake_pressure_low 都是 60。后续应按 L1 stop 和 RiskEngine warning 两层拆开。"
+  },
+
+  "_l1_stop_thresholds_comment": "以下是 L1 硬安全阈值。触发后 hard_safety_check 应直接制动。RiskEngine 不应依赖这些字段做普通 warning。",
+
   "methane_stop": 0.5,
+  "_methane_stop_comment": "L1 停机阈值：甲烷浓度 >= 0.5 %LEL 触发 methane_over_stop。当前与 methane_alarm 相同，需要确认是否应分离 warning/alarm/stop。",
+
   "co_stop": 24.0,
+  "_co_stop_comment": "L1 停机阈值：CO >= 24 ppm 触发 co_over_stop。当前与 co_warn/co_alarm 相同。",
+
   "coolant_stop": 98.0,
+  "_coolant_stop_comment": "L1 停机阈值：冷却液温度 >= 98 ℃ 触发 coolant_over_stop。RiskEngine warning 使用 coolant_temp_warn/high。",
+
   "exhaust_stop": 69.0,
+  "_exhaust_stop_comment": "L1 停机阈值：排气温度 >= 69 ℃ 触发 exhaust_over_stop。RiskEngine warning 使用 exhaust_temp_warn/high。",
+
   "intake_pressure_min": 90.0,
+  "_intake_pressure_min_comment": "L1 下限阈值：进气压力 < 90 kPa 触发 intake_pressure_out_of_range。RiskEngine warning 使用 intake_pressure_warn_low。",
+
   "water_level_alarm_min": 10.0,
+  "_water_level_alarm_min_comment": "L1 下限阈值：水箱液位 < 10% 触发 water_level_low。RiskEngine warning 使用 water_level_warn_low/low。",
+
   "oil_pressure_min_kpa": 70.0,
+  "_oil_pressure_min_kpa_comment": "L1 下限阈值：机油压力 < 70 kPa 触发 oil_pressure_low。RiskEngine warning 使用 oil_pressure_warn_kpa/low_kpa。",
+
   "diesel_level_min": 30.0,
+  "_diesel_level_min_comment": "L1 下限阈值：柴油液位 < 30 cm 触发 diesel_level_low。RiskEngine 当前 diesel_level_low 同值。",
+
   "brake_pressure_min": 60.0,
+  "_brake_pressure_min_comment": "L1 下限阈值：制动压力 < 60 bar 触发 brake_pressure_low_stop。RiskEngine warning 使用 brake_pressure_warn_low。",
+
   "walking_pressure_min": 25.0,
+  "_walking_pressure_min_comment": "L1 行走/行驶压力下限：walking/travel pressure < 25 bar 触发 walking_pressure_over_stop。",
+
   "walking_pressure_max": 380.0,
+  "_walking_pressure_max_comment": "L1 行走/行驶压力上限：walking/travel pressure > 380 bar 触发 walking_pressure_over_stop。RiskEngine warning 高值通常从 250 开始。",
+
   "system_pressure_min": 80.0,
+  "_system_pressure_min_comment": "L1 系统压力下限：system_pressure_bar < 80 bar 触发 system_pressure_low_stop。RiskEngine warning 使用 150 bar。",
+
   "clamp_pressure_min": 70.0,
+  "_clamp_pressure_min_comment": "L1 夹紧压力下限：clamp_pressure_bar < 70 bar 触发 clamp_pressure_over_stop。RiskEngine warning low 使用 110 bar。",
+
   "clamp_pressure_max": 140.0,
+  "_clamp_pressure_max_comment": "L1 夹紧压力上限：clamp_pressure_bar > 140 bar 触发 clamp_pressure_over_stop。RiskEngine warning high 使用 135 bar。",
+
   "hydraulic_oil_temp_max": 69.0,
+  "_hydraulic_oil_temp_max_comment": "L1 液压油温上限：hydraulic_oil_temp_c > 69 ℃ 触发 hydraulic_oil_temp_over_stop。RiskEngine warning 使用 65/69。",
+
   "hydraulic_oil_level_min": 40.0,
+  "_hydraulic_oil_level_min_comment": "L1 液压油液位下限：hydraulic_oil_level_pct < 40% 触发 hydraulic_oil_level_low。",
+
   "make_up_oil_pressure_min": 16.0,
+  "_make_up_oil_pressure_min_comment": "L1 补油压力下限：make_up_oil_pressure_bar < 16 bar 触发 make_up_oil_pressure_low_stop。RiskEngine warning 使用 23 bar。",
+
   "rpm_max": 2300.0,
-  "speed_max_kmh": 9.0,
+  "_rpm_max_comment": "L1 转速上限：engine_rpm > 2300 rpm 触发 rpm_over_stop。RiskEngine warning 使用 2200 rpm。",
+
+  "speed_max_mps": 9.0,
+  "_speed_max_mps_comment": "L1 速度上限：speed_mps > 9.0 m/s 触发 speed_over_stop。注意车型速度阈值应按模型区分。",
+
+  "_risk_engine_thresholds_comment": "以下是 RiskEngine 风险辅助阈值。用于输出 warning/high/low/normal 多风险，不直接代表 L1 停机。",
+
   "coolant_temp_warn": 95.0,
+  "_coolant_temp_warn_comment": "RiskEngine 预警阈值：冷却液温度 > 95 ℃ 输出 coolant_warning；建议语义为 冷却水温偏高。",
+
   "coolant_temp_high": 98.0,
+  "_coolant_temp_high_comment": "RiskEngine 高危/报警边界：冷却液温度 > 98 ℃ 可映射 alarm_code=106；与 coolant_stop 同值。",
+
   "surface_temp_warn": 147.0,
+  "_surface_temp_warn_comment": "RiskEngine 预警阈值：表面温度 > 147 ℃ 输出 surface_temp_warning。",
+
   "surface_temp_high": 150.0,
+  "_surface_temp_high_comment": "RiskEngine 高危/报警边界：表面温度 > 150 ℃ 可映射 alarm_code=107。",
+
   "exhaust_temp_warn": 65.0,
+  "_exhaust_temp_warn_comment": "RiskEngine 预警阈值：排气温度 > 65 ℃ 输出 exhaust_warning。",
+
   "exhaust_temp_high": 69.0,
+  "_exhaust_temp_high_comment": "RiskEngine 高危/报警边界：排气温度 > 69 ℃ 可映射 alarm_code=108；与 exhaust_stop 同值。",
+
   "oil_pressure_warn_kpa": 380.0,
+  "_oil_pressure_warn_kpa_comment": "RiskEngine 低压预警阈值：机油压力 < 380 kPa 输出 oil_pressure_low。该值较高，可能导致频繁预警，需要重点确认。",
+
   "oil_pressure_low_kpa": 70.0,
+  "_oil_pressure_low_kpa_comment": "RiskEngine 低压报警边界：机油压力 < 70 kPa 可映射 alarm_code=113；与 L1 oil_pressure_min_kpa 同值。",
+
   "hydraulic_oil_temp_warn": 65.0,
+  "_hydraulic_oil_temp_warn_comment": "RiskEngine 预警阈值：液压油温 > 65 ℃ 输出 hydraulic_oil_temp_warning。",
+
   "hydraulic_oil_temp_high": 69.0,
+  "_hydraulic_oil_temp_high_comment": "RiskEngine 高危/报警边界：液压油温 > 69 ℃ 可映射 alarm_code=101；与 L1 hydraulic_oil_temp_max 同值。",
+
   "hydraulic_oil_level_low": 40.0,
+  "_hydraulic_oil_level_low_comment": "RiskEngine 液位低阈值：液压油液位 < 40% 输出 hydraulic_oil_level_low；当前也映射 alarm_code=102。",
+
   "make_up_oil_pressure_warn_low": 23.0,
+  "_make_up_oil_pressure_warn_low_comment": "RiskEngine 低压预警阈值：补油压力 < 23 bar 输出 make_up_oil_pressure_low。",
+
   "make_up_oil_pressure_low": 16.0,
+  "_make_up_oil_pressure_low_comment": "RiskEngine 低压报警边界：补油压力 < 16 bar 可映射 alarm_code=121；与 L1 make_up_oil_pressure_min 同值。",
+
   "make_up_oil_pressure_high": 28.0,
+  "_make_up_oil_pressure_high_comment": "语义/风险高压参考：补油压力 > 28 bar 可认为偏高。目前 RiskEngine 主要处理 low，high 风险待补齐。",
+
   "brake_pressure_warn_low": 150.0,
+  "_brake_pressure_warn_low_comment": "RiskEngine 低压预警阈值：制动压力 < 150 bar 输出 brake_pressure_low。",
+
   "brake_pressure_low": 60.0,
+  "_brake_pressure_low_comment": "RiskEngine 低压报警边界：制动压力 < 60 bar 可映射 alarm_code=118；与 L1 brake_pressure_min 同值。",
+
   "travel_pressure_warn_low": 25.0,
+  "_travel_pressure_warn_low_comment": "RiskEngine 行走压力预警下限：travel/walking pressure < 25 bar 输出 travel_pressure_warning。",
+
   "travel_pressure_warn_high": 250.0,
+  "_travel_pressure_warn_high_comment": "RiskEngine 行走压力预警上限：travel/walking pressure > 250 bar 输出 travel_pressure_warning。",
+
   "travel_pressure_high": 380.0,
+  "_travel_pressure_high_comment": "RiskEngine 行走压力报警/高危上限：travel/walking pressure > 380 bar 可映射 alarm_code=117；与 L1 walking_pressure_max 同值。",
+
   "system_pressure_warn_low": 150.0,
+  "_system_pressure_warn_low_comment": "RiskEngine 系统压力低预警阈值：system_pressure_bar < 150 bar 输出 system_pressure_low。",
+
   "system_pressure_low": 80.0,
+  "_system_pressure_low_comment": "RiskEngine 系统压力低报警边界：system_pressure_bar < 80 bar 可映射 alarm_code=120；与 L1 system_pressure_min 同值。",
+
   "clamp_pressure_warn_low": 110.0,
+  "_clamp_pressure_warn_low_comment": "RiskEngine 夹紧压力低预警阈值：clamp_pressure_bar < 110 bar 输出 clamp_pressure_low。",
+
   "clamp_pressure_warn_high": 135.0,
+  "_clamp_pressure_warn_high_comment": "RiskEngine 夹紧压力高预警阈值：clamp_pressure_bar > 135 bar 输出 clamp_pressure_high。",
+
   "clamp_pressure_low": 70.0,
+  "_clamp_pressure_low_comment": "RiskEngine 夹紧压力低报警边界：clamp_pressure_bar < 70 bar 可映射 alarm_code=119；与 L1 clamp_pressure_min 同值。",
+
   "clamp_pressure_high": 140.0,
+  "_clamp_pressure_high_comment": "RiskEngine 夹紧压力高报警/高危边界：clamp_pressure_bar > 140 bar；与 L1 clamp_pressure_max 同值。目前高压报警码未明确。",
+
   "intake_pressure_warn_low": 104.0,
+  "_intake_pressure_warn_low_comment": "RiskEngine 进气压力低预警阈值：intake_pressure_kpa < 104 kPa 输出 intake_pressure_low。",
+
   "intake_pressure_low": 90.0,
+  "_intake_pressure_low_comment": "RiskEngine 进气压力低报警边界：intake_pressure_kpa < 90 kPa 可映射 alarm_code=114；与 L1 intake_pressure_min 同值。",
+
   "water_level_warn_low": 20.0,
+  "_water_level_warn_low_comment": "RiskEngine 水箱液位低预警阈值：water_tank_level_pct < 20% 输出 water_tank_low。",
+
   "water_level_low": 10.0,
+  "_water_level_low_comment": "RiskEngine 水箱液位低报警边界：water_tank_level_pct < 10% 可映射 alarm_code=112；与 L1 water_level_alarm_min 同值。",
+
   "diesel_level_low": 30.0,
+  "_diesel_level_low_comment": "RiskEngine 柴油液位低阈值：diesel_level_cm < 30 cm 输出 diesel_level_low，并可映射 alarm_code=111。当前没有 warn/low 两级分层。",
+
   "methane_alarm": 0.5,
+  "_methane_alarm_comment": "RiskEngine 甲烷报警/预警阈值：methane_pct >= 0.5 输出 methane_warning，并可映射 alarm_code=109。当前与 methane_stop 同值。",
+
   "co_warn": 24.0,
+  "_co_warn_comment": "RiskEngine CO 预警阈值：co_ppm >= 24 输出 co_warning。当前与 co_alarm/co_stop 同值。",
+
   "co_alarm": 24.0,
-  "speed_warn_high_kmh": 7.92,
-  "speed_alarm_high_kmh": 9.0,
-  "speed_warn_low_kmh": 5.4,
+  "_co_alarm_comment": "RiskEngine CO 报警边界：co_ppm >= 24 可映射 alarm_code=130。当前与 co_warn/co_stop 同值。",
+
+  "speed_warn_high_mps": 8.8,
+  "_speed_warn_high_mps_comment": "RiskEngine 速度高预警阈值：speed_mps > 8.8 m/s 输出 speed_high。注意该总表与车型配置可能不同。",
+
+  "speed_alarm_high_mps": 9.0,
+  "_speed_alarm_high_mps_comment": "RiskEngine 速度高报警边界：speed_mps > 9.0 m/s 可映射 alarm_code=110。当前与 L1 speed_max_mps 同值。",
+
+  "speed_warn_low_mps": 5.4,
+  "_speed_warn_low_mps_comment": "RiskEngine 速度低预警阈值：speed_mps < 5.4 m/s 输出 speed_low_persistent。不同车型差异较大，需要按车型配置。",
+
   "rpm_warn_high": 2200.0,
-  "rpm_alarm_high": 2300.0
+  "_rpm_warn_high_comment": "RiskEngine 转速高预警阈值：engine_rpm > 2200 rpm 输出 rpm_high。",
+
+  "rpm_alarm_high": 2300.0,
+  "_rpm_alarm_high_comment": "RiskEngine 转速高报警边界：engine_rpm > 2300 rpm。当前 RiskEngine 尚未给 rpm_high 映射报警码；L1 使用 rpm_max。"
 }
